@@ -668,7 +668,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
       // This controls velocity reset & Y interpolation (if applicable)
       if (w(IDN,k,j,i) > rho_cut)
       {
-        w(IPR,k,j,i) = ceos->GetPressure(w(IDN,k,j,i));
+        // prim(IPR) now stores temperature; use the cold EOS temperature.
+        w(IPR,k,j,i) = ceos->GetTemperature();
 
 #if NSCALARS > 0
         for (int iy=0; iy<NSCALARS; ++iy)

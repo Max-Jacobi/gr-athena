@@ -194,6 +194,7 @@ GRDynamical::GRDynamical(MeshBlock *pmb, ParameterInput *pin, bool coarse_flag)
     W_.NewAthenaTensor(nc1);
 
     w_hrho_.NewAthenaTensor(nc1);
+    p_eos_.NewAthenaTensor(nc1);
 
     // sources
     Stau_.NewAthenaTensor(nc1);
@@ -379,18 +380,17 @@ void GRDynamical::AddCoordTermsDivergence(
       }
 #endif
 
-#if defined(Z4C_CX_ENABLED) || defined(Z4C_CC_ENABLED)
-      Real T = pmb->phydro->derived_ms(IX_T,k,j,i);
-      Real h = pmb->phydro->derived_ms(IX_ETH,k,j,i);
-#else
-      Real T = peos->GetEOS().GetTemperatureFromP(n, w_p(k,j,i), Y);
+      // prim(IPR) now stores temperature; read it directly.
+      Real T = w_p(k,j,i);
+      Real p_eos = peos->GetEOS().GetPressure(n, T, Y);
       Real h = peos->GetEOS().GetEnthalpy(n, T, Y);
-#endif
 
       w_hrho_(i) = w_rho(k,j,i) * h;
+      p_eos_(i)  = p_eos;
 #else
       const Real gamma_adi = peos->GetGamma();
-    	w_hrho_(i) = w_rho(k,j,i) + gamma_adi/(gamma_adi-1.0) * w_p(k,j,i);
+      w_hrho_(i) = w_rho(k,j,i) + gamma_adi/(gamma_adi-1.0) * w_p(k,j,i);
+      p_eos_(i)  = w_p(k,j,i);  // pressure is IPR in non-USETM
 #endif
     }
 
@@ -462,7 +462,7 @@ void GRDynamical::AddCoordTermsDivergence(
       CC_PCO_ILOOP1(i)
       {
         T00(i) = ((w_hrho_(i) + b2_(i)) * SQR(W_(i) * oo_alpha_(i)) +
-                  (w_p(k, j, i) + b2_(i) / 2.0) * (-1.0 * SQR(oo_alpha_(i))) -
+                  (p_eos_(i) + b2_(i) / 2.0) * (-1.0 * SQR(oo_alpha_(i))) -
                   b0_(i) * b0_(i));
       }
 
@@ -473,7 +473,7 @@ void GRDynamical::AddCoordTermsDivergence(
           T0i_u(a, i) =
               ((w_hrho_(i) + b2_(i)) * W_(i) * oo_alpha_(i) *
                    (w_util_u_(a, i) - W_(i) * beta_u_(a, i) * oo_alpha_(i)) +
-               (w_p(k, j, i) + b2_(i) / 2.0) * beta_u_(a, i) * SQR(oo_alpha_(i)) -
+               (p_eos_(i) + b2_(i) / 2.0) * beta_u_(a, i) * SQR(oo_alpha_(i)) -
                b0_(i) * bi_u_(a, i));
         }
       }
@@ -499,7 +499,7 @@ void GRDynamical::AddCoordTermsDivergence(
               ((w_hrho_(i) + b2_(i)) *
                    (w_util_u_(a, i) - W_(i) * beta_u_(a, i) * oo_alpha_(i)) *
                    (w_util_u_(b, i) - W_(i) * beta_u_(b, i) * oo_alpha_(i)) +
-               (w_p(k, j, i) + b2_(i) / 2.0) *
+               (p_eos_(i) + b2_(i) / 2.0) *
                    (gamma_uu_(a, b, i) -
                     beta_u_(a, i) * beta_u_(b, i) * SQR(oo_alpha_(i))) -
                bi_u_(a, i) * bi_u_(b, i));
@@ -576,7 +576,7 @@ void GRDynamical::AddCoordTermsDivergence(
           CC_PCO_ILOOP1(i)
           {
             Stau_(i) += (w_hrho_(i) * w_util_u_(a, i) * w_util_u_(b, i) +
-                        w_p(k, j, i) * gamma_uu_(a, b, i)) *
+                        p_eos_(i) * gamma_uu_(a, b, i)) *
                        K_dd_(a, b, i);
           }
         }
@@ -587,7 +587,7 @@ void GRDynamical::AddCoordTermsDivergence(
       {
         CC_PCO_ILOOP1(i)
         {
-          SS_d_(a, i) = -(w_hrho_(i) * SQR(W_(i)) - w_p(k, j, i)) *
+          SS_d_(a, i) = -(w_hrho_(i) * SQR(W_(i)) - p_eos_(i)) *
                        dalpha_d_(a, i) * oo_alpha_(i);
         }
 
@@ -605,7 +605,7 @@ void GRDynamical::AddCoordTermsDivergence(
             {
               SS_d_(a, i) += (0.5 *
                               (w_hrho_(i) * w_util_u_(b, i) * w_util_u_(c, i) +
-                               w_p(k, j, i) * gamma_uu_(b, c, i)) *
+                               p_eos_(i) * gamma_uu_(b, c, i)) *
                               dgamma_ddd_(a, b, c, i));
             }
           }

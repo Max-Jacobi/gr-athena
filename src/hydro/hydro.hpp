@@ -201,6 +201,10 @@ public:
   AT_C_sca w_hrho_l_;
   AT_C_sca w_hrho_r_;
 
+  // pressure (computed from temperature in USETM mode)
+  AT_C_sca press_l_;
+  AT_C_sca press_r_;
+
   // prim / cons shaped scratches
   AT_H_vec cons_l_;
   AT_H_vec cons_r_;

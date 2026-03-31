@@ -428,7 +428,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 #endif
     if (rho[flat_ix] > rho_min) {
       Real pres_eos = ceos->GetPressure(rho[flat_ix]);
-      Real pres_diff = max(abs(pres[flat_ix] / pres_eos - 1), pres_diff);
+      Real pres_diff_local = max(abs(pres[flat_ix] / pres_eos - 1), pres_diff);
+      pres_diff = pres_diff_local;
       pres[flat_ix] = pres_eos;
     }
 
@@ -440,15 +441,17 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 
 
     phydro->w(IDN,k,j,i) = rho[flat_ix];
-    phydro->w(IPR,k,j,i) =  pres[flat_ix];
+#if USETM
+    // prim(IPR) now stores temperature; use the cold EOS temperature.
+    phydro->w(IPR,k,j,i) = ceos->GetTemperature();
+#else
+    phydro->w(IPR,k,j,i) = pres[flat_ix];
+#endif
     phydro->w(IVX, k, j, i) = ux[flat_ix];
     phydro->w(IVY, k, j, i) = uy[flat_ix];
     phydro->w(IVZ, k, j, i) = uz[flat_ix];
 
     // Add perturbations
-    if (pres_pert and r < rns_data->r_e) {
-      phydro->w(IPR,k,j,i) -= pres_pert * pres[flat_ix];
-    }
     if (v_pert and r < rns_data->r_e) {
       phydro->w(IVX, k, j, i) -= v_pert * std::cos(M_PI*r/(2.0*rns_data->r_e))*x[i]/r;
       phydro->w(IVY, k, j, i) -= v_pert * std::cos(M_PI*r/(2.0*rns_data->r_e))*y[j]/r;

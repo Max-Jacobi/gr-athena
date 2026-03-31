@@ -223,9 +223,8 @@ void InitM1HomogenousMedium(MeshBlock *pmb, ParameterInput *pin)
     pscalars->r(0,k,j,i) = Ye;
 #endif
 #if USETM
-    Real const nb = rho/(pmb->peos->GetEOS().GetBaryonMass());
-    Real Yvec[MAX_SPECIES] = {Ye};
-    phydro->w(IPR,k,j,i) = pmb->peos->GetEOS().GetPressure(nb, temp, Yvec);
+    // prim(IPR) now stores temperature directly; no need to compute pressure.
+    phydro->w(IPR,k,j,i) = temp;
 #else
     phydro->w(IPR,k,j,i) = press;
 #endif

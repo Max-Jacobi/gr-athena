@@ -379,24 +379,26 @@ class EquationOfState {
   {
     bool is_physical = true;
 
-    Real p = NAN;
+    Real T_or_p = NAN;
     Real rho = NAN;
 
     if(prim.GetDim4()==1)
     {
-      p   = prim(IPR,i);
-      rho = prim(IDN,i);
+      T_or_p = prim(IPR,i);
+      rho    = prim(IDN,i);
     }
     else if(prim.GetDim4()==5)
     {
-      p   = prim(IPR,k,j,i);
-      rho = prim(IDN,k,j,i);
+      T_or_p = prim(IPR,k,j,i);
+      rho    = prim(IDN,k,j,i);
     }
 
     // N.B.!
     // to look like standard conditions need to put rho_ = rho h
 
 #if USETM
+    // prim(IPR,...) stores temperature; derive pressure from it.
+    Real T = T_or_p;
     Real mb = GetEOS().GetBaryonMass();
     Real n = rho / mb;
     // FIXME: Generalize to work with EOSes accepting particle fractions.
@@ -409,9 +411,10 @@ class EquationOfState {
     }
 #endif
 
-    Real T = GetEOS().GetTemperatureFromP(n, p, Y);
+    Real p = GetEOS().GetPressure(n, T, Y);
     Real rho_ = rho*GetEOS().GetEnthalpy(n, T, Y);
 #else
+    Real p = T_or_p;  // prim(IPR,...) stores pressure in non-USETM path
     Real gamma_adi = GetGamma();
     Real rho_ = rho + gamma_adi/(gamma_adi-1.0) * p;  // EOS dep.
 #endif
@@ -445,7 +448,7 @@ class EquationOfState {
     prim(IVX, k, j, i) = prim_pt[IVX];
     prim(IVY, k, j, i) = prim_pt[IVY];
     prim(IVZ, k, j, i) = prim_pt[IVZ];
-    prim(IPR, k, j, i) = prim_pt[IPR];
+    prim(IPR, k, j, i) = prim_pt[ITM];  // prim(IPR) stores temperature
     for(int n=0; n<NSCALARS; n++){
       prim_scalar(n, k, j, i) = prim_pt[IYF + n];
     }
@@ -465,7 +468,7 @@ class EquationOfState {
     prim(IVX, k, j, i) = prim_pt[IVX];
     prim(IVY, k, j, i) = prim_pt[IVY];
     prim(IVZ, k, j, i) = prim_pt[IVZ];
-    prim(IPR, k, j, i) = prim_pt[IPR];
+    prim(IPR, k, j, i) = prim_pt[ITM];  // prim(IPR) stores temperature
     temperature(k,j,i) = prim_pt[ITM];
     for(int n=0; n<NSCALARS; n++){
       prim_scalar(n, k, j, i) = prim_pt[IYF + n];
@@ -485,7 +488,7 @@ class EquationOfState {
     prim_(IVX, i) = prim_pt[IVX];
     prim_(IVY, i) = prim_pt[IVY];
     prim_(IVZ, i) = prim_pt[IVZ];
-    prim_(IPR, i) = prim_pt[IPR];
+    prim_(IPR, i) = prim_pt[ITM];  // prim(IPR) stores temperature
     for(int n=0; n<NSCALARS; n++){
       prim_scalar_(n, i) = prim_pt[IYF + n];
     }
@@ -505,7 +508,7 @@ class EquationOfState {
     prim_(IVX, i) = prim_pt[IVX];
     prim_(IVY, i) = prim_pt[IVY];
     prim_(IVZ, i) = prim_pt[IVZ];
-    prim_(IPR, i) = prim_pt[IPR];
+    prim_(IPR, i) = prim_pt[ITM];  // prim(IPR) stores temperature
     temperature_(i) = prim_pt[ITM];
     for(int n=0; n<NSCALARS; n++){
       prim_scalar_(n, i) = prim_pt[IYF + n];

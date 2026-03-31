@@ -292,6 +292,9 @@ void Hydro::RiemannSolver(
 
     w_hrho_l_(i) = w_rho_l_(i) * hl__;
     w_hrho_r_(i) = w_rho_r_(i) * hr__;
+    // prim(IPR) now stores temperature; compute pressure for cons/flux.
+    press_l_(i) = peos->GetEOS().GetPressure(nl__, Tl__, Yl__);
+    press_r_(i) = peos->GetEOS().GetPressure(nr__, Tr__, Yr__);
 
     // Calculate the sound speeds
     if (precon->xorder_use_aux_cs2)
@@ -357,7 +360,11 @@ void Hydro::RiemannSolver(
     cons_l_(IDN,i) = w_rho_l_(i) * W_l_(i) * sqrt_detgamma_(i);
     // tau = (rho * h = ) wgas * gamma_lorentz**2 - rho * gamma_lorentz - p
     cons_l_(IEN,i) = sqrt_detgamma_(i) * (
+#if USETM
+      w_hrho_l_(i) * SQR(W_l_(i)) - w_rho_l_(i)*W_l_(i) - press_l_(i)
+#else
       w_hrho_l_(i) * SQR(W_l_(i)) - w_rho_l_(i)*W_l_(i) - w_p_l_(i)
+#endif
     );
   }
 
@@ -385,7 +392,11 @@ void Hydro::RiemannSolver(
     // tau flux: alpha_(S^i - Dv^i) - beta^i tau
     flux_l_(IEN,i) = cons_l_(IEN,i) * alpha_(i) * (
       w_v_u_l_(ivx-1,i) - beta_u_(ivx-1,i) * oo_alpha_(i)
+#if USETM
+    ) + alpha_(i)*sqrt_detgamma_(i)*press_l_(i)*w_v_u_l_(ivx-1,i);
+#else
     ) + alpha_(i)*sqrt_detgamma_(i)*w_p_l_(i)*w_v_u_l_(ivx-1,i);
+#endif
   }
 
   for (int a=0; a<NDIM; ++a)
@@ -404,7 +415,11 @@ void Hydro::RiemannSolver(
   #pragma omp simd
   for (int i = il; i <= iu; ++i)
   {
+#if USETM
+    flux_l_(ivx,i) += press_l_(i) * alpha_(i) * sqrt_detgamma_(i);
+#else
     flux_l_(ivx,i) += w_p_l_(i) * alpha_(i) * sqrt_detgamma_(i);
+#endif
   }
 
 
@@ -416,7 +431,11 @@ void Hydro::RiemannSolver(
     cons_r_(IDN,i) = w_rho_r_(i) * W_r_(i) * sqrt_detgamma_(i);
     // tau = (rho * h = ) wgas * gamma_lorentz**2 - rho * gamma_lorentz - p
     cons_r_(IEN,i) = sqrt_detgamma_(i) * (
+#if USETM
+      w_hrho_r_(i) * SQR(W_r_(i)) - w_rho_r_(i)*W_r_(i) - press_r_(i)
+#else
       w_hrho_r_(i) * SQR(W_r_(i)) - w_rho_r_(i)*W_r_(i) - w_p_r_(i)
+#endif
     );
   }
 
@@ -444,7 +463,11 @@ void Hydro::RiemannSolver(
     // tau flux: alpha_(S^i - Dv^i) - beta^i tau
     flux_r_(IEN,i) = cons_r_(IEN,i) * alpha_(i) * (
       w_v_u_r_(ivx-1,i) - beta_u_(ivx-1,i) * oo_alpha_(i)
+#if USETM
+    ) + alpha_(i)*sqrt_detgamma_(i)*press_r_(i)*w_v_u_r_(ivx-1,i);
+#else
     ) + alpha_(i)*sqrt_detgamma_(i)*w_p_r_(i)*w_v_u_r_(ivx-1,i);
+#endif
   }
 
   for (int a=0; a<NDIM; ++a)
@@ -463,7 +486,11 @@ void Hydro::RiemannSolver(
   #pragma omp simd
   for (int i = il; i <= iu; ++i)
   {
+#if USETM
+    flux_r_(ivx,i) += press_r_(i) * alpha_(i) * sqrt_detgamma_(i);
+#else
     flux_r_(ivx,i) += w_p_r_(i) * alpha_(i) * sqrt_detgamma_(i);
+#endif
   }
 
   // Set fluxes ---------------------------------------------------------------

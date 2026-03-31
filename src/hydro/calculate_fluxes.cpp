@@ -261,8 +261,9 @@ void ReconstructFields(
 
     if (!pr->xorder_use_aux_T || peos->recompute_temperature)
     {
-      al_(IX_T,i) = peos->GetEOS().GetTemperatureFromP(nl__, wl_(IPR,i), Yl__);
-      ar_(IX_T,i) = peos->GetEOS().GetTemperatureFromP(nr__, wr_(IPR,i), Yr__);
+      // prim(IPR) now stores temperature directly; no conversion needed.
+      al_(IX_T,i) = wl_(IPR,i);
+      ar_(IX_T,i) = wr_(IPR,i);
     }
 
     // now depending on settings unpack limited / floored
@@ -280,12 +281,17 @@ void ReconstructFields(
       peos->GetEOS().ApplyTemperatureLimits(al_(IX_T,i));
       peos->GetEOS().ApplyTemperatureLimits(ar_(IX_T,i));
 
+      Real Pl__ = peos->GetEOS().GetPressure(nl__, al_(IX_T,i), Yl__);
+      Real Pr__ = peos->GetEOS().GetPressure(nr__, ar_(IX_T,i), Yr__);
       const bool fll__ = peos->GetEOS().ApplyPrimitiveFloor(
-        nl__, Wvul__, wl_(IPR,i), al_(IX_T,i), Yl__
+        nl__, Wvul__, Pl__, al_(IX_T,i), Yl__
       );
       const bool flr__ = peos->GetEOS().ApplyPrimitiveFloor(
-        nr__, Wvur__, wr_(IPR,i), ar_(IX_T,i), Yr__
+        nr__, Wvur__, Pr__, ar_(IX_T,i), Yr__
       );
+      // Write updated temperature back to prim(IPR) slots
+      wl_(IPR,i) = al_(IX_T,i);
+      wr_(IPR,i) = ar_(IX_T,i);
     }
 
     if (!pr->xorder_use_aux_h)

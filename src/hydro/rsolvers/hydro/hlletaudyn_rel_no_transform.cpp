@@ -176,8 +176,11 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
     Real nr = rho_r/mb;
     // FIXME: Generalize to work with EOSes accepting particle fractions.
     Real Y[MAX_SPECIES] = {0.0}; // TODO PH: Fix
-    Real Tl = pmy_block->peos->GetEOS().GetTemperatureFromP(nl, pgas_l, Y);
-    Real Tr = pmy_block->peos->GetEOS().GetTemperatureFromP(nr, pgas_r, Y);
+    // prim(IPR) now stores temperature directly; pgas_l/pgas_r are temperatures.
+    Real Tl = pgas_l;
+    Real Tr = pgas_r;
+    Real P_l = pmy_block->peos->GetEOS().GetPressure(nl, Tl, Y);
+    Real P_r = pmy_block->peos->GetEOS().GetPressure(nr, Tr, Y);
     Real wgas_l = rho_l*pmy_block->peos->GetEOS().GetEnthalpy(nl, Tl, Y);
     Real wgas_r = rho_r*pmy_block->peos->GetEOS().GetEnthalpy(nr, Tr, Y);
 
@@ -218,7 +221,11 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
     // Calculate left conserved quantities
     Real cons_l[NHYDRO];
     cons_l[IDN] = rho_l*W_l*sdetgamma;
+#if USETM
+    cons_l[IEN] = (wgas_l*Wsq_l - P_l)*sdetgamma - cons_l[IDN];
+#else
     cons_l[IEN] = (wgas_l*Wsq_l - pgas_l)*sdetgamma - cons_l[IDN];
+#endif
     cons_l[IM1] = wgas_l*Wsq_l*vd_l[0]*sdetgamma;
     cons_l[IM2] = wgas_l*Wsq_l*vd_l[1]*sdetgamma;
     cons_l[IM3] = wgas_l*Wsq_l*vd_l[2]*sdetgamma;
@@ -227,16 +234,28 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
     Real flux_l[NHYDRO];
     Real ucov_l = alpha*(v_l[ivx-1] - beta_u[ivx-1]/alpha);
     flux_l[IDN] = cons_l[IDN]*ucov_l;
+#if USETM
+    flux_l[IEN] = cons_l[IEN]*ucov_l + alpha*sdetgamma*P_l*v_l[ivx-1];
+#else
     flux_l[IEN] = cons_l[IEN]*ucov_l + alpha*sdetgamma*pgas_l*v_l[ivx-1];
+#endif
     flux_l[IM1] = cons_l[IM1]*ucov_l;
     flux_l[IM2] = cons_l[IM2]*ucov_l;
     flux_l[IM3] = cons_l[IM3]*ucov_l;
+#if USETM
+    flux_l[ivx] += sdetgamma*alpha*P_l;
+#else
     flux_l[ivx] += sdetgamma*alpha*pgas_l;
+#endif
 
     // Calculate right conserved quantities
     Real cons_r[NHYDRO];
     cons_r[IDN] = rho_r*W_r*sdetgamma;
+#if USETM
+    cons_r[IEN] = (wgas_r*Wsq_r - P_r)*sdetgamma - cons_r[IDN];
+#else
     cons_r[IEN] = (wgas_r*Wsq_r - pgas_r)*sdetgamma - cons_r[IDN];
+#endif
     cons_r[IM1] = wgas_r*Wsq_r*vd_r[0]*sdetgamma;
     cons_r[IM2] = wgas_r*Wsq_r*vd_r[1]*sdetgamma;
     cons_r[IM3] = wgas_r*Wsq_r*vd_r[2]*sdetgamma;
@@ -245,11 +264,19 @@ void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
     Real flux_r[NHYDRO];
     Real ucov_r = alpha*(v_r[ivx-1] - beta_u[ivx-1]/alpha);
     flux_r[IDN] = cons_r[IDN]*ucov_r;
+#if USETM
+    flux_r[IEN] = cons_r[IEN]*ucov_r + alpha*sdetgamma*P_r*v_r[ivx-1];
+#else
     flux_r[IEN] = cons_r[IEN]*ucov_r + alpha*sdetgamma*pgas_r*v_r[ivx-1];
+#endif
     flux_r[IM1] = cons_r[IM1]*ucov_r;
     flux_r[IM2] = cons_r[IM2]*ucov_r;
     flux_r[IM3] = cons_r[IM3]*ucov_r;
+#if USETM
+    flux_r[ivx] += sdetgamma*alpha*P_r;
+#else
     flux_r[ivx] += sdetgamma*alpha*pgas_r;
+#endif
 
     // Calculate net flux term
     for (int n = 0; n < NHYDRO; n++) {
