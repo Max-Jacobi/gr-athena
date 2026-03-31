@@ -1161,6 +1161,7 @@ private:
 
   AT_N_sca W_;      // Lorentz factor
   AT_N_sca w_hrho_; // h * rho
+  AT_N_sca p_eos_;  // pressure (from T in USETM mode)
 
   // sources
   AT_N_sca Stau_; // tau eq

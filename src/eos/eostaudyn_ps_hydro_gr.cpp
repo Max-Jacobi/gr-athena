@@ -421,7 +421,7 @@ void EquationOfState::ConservedToPrimitive(
         prim(IVX, k, j, i) = prim_pt[IVX];
         prim(IVY, k, j, i) = prim_pt[IVY];
         prim(IVZ, k, j, i) = prim_pt[IVZ];
-        prim(IPR, k, j, i) = prim_pt[IPR];
+        prim(IPR, k, j, i) = prim_pt[ITM];  // prim(IPR) now stores temperature
 
         for(int n=0; n<NSCALARS; n++)
         {
@@ -449,25 +449,19 @@ void EquationOfState::ConservedToPrimitive(
         prim_pt[IVX] = prim(IVX, k, j, i);
         prim_pt[IVY] = prim(IVY, k, j, i);
         prim_pt[IVZ] = prim(IVZ, k, j, i);
-        prim_pt[IPR] = prim(IPR, k, j, i);
-        prim_pt[ITM] = temperature(k,j,i);
+        prim_pt[ITM] = prim(IPR, k, j, i);  // prim(IPR) now stores temperature
 
         for(int n=0; n<NSCALARS; n++){
           prim_pt[IYF + n] = prim_scalar(n, k, j, i);
         }
-      }
-
-      // BD: not clear why these behave differently (limiting)?
-      if (recompute_temperature)
-      {
-        ph->derived_ms(IX_T,k,j,i) = ps.GetEOS()->GetTemperatureFromP(
-          prim_pt[IDN], prim_pt[IPR], &prim_pt[IYF]
+        // Reconstruct pressure from temperature for PrimitiveSolver internal use
+        prim_pt[IPR] = ps.GetEOS()->GetPressure(
+          prim_pt[IDN], prim_pt[ITM], &prim_pt[IYF]
         );
       }
-      else
-      {
-        ph->derived_ms(IX_T,k,j,i) = prim_pt[ITM];
-      }
+
+      // prim(IPR) now stores temperature directly; store it in derived as well.
+      ph->derived_ms(IX_T,k,j,i) = prim_pt[ITM];
 
       // as in `PrimitiveSolver`
       ph->derived_ms(IX_LOR,k,j,i) = std::max(
@@ -906,7 +900,7 @@ void EquationOfState::ApplyPrimitiveFloors(AA &prim, AA &prim_scalar,
   // Extract the primitive variables and floor them using PrimitiveSolver.
   Real Y[MAX_SPECIES] = {0.0};
   Real Wvu[3] = {};
-  Real P;
+  Real T;
   Real n;
 
   Real mb = ps.GetEOS()->GetBaryonMass();
@@ -915,7 +909,7 @@ void EquationOfState::ApplyPrimitiveFloors(AA &prim, AA &prim_scalar,
   if (prim.GetDim4()==1)
   {
     n = prim(IDN,i)/mb;
-    P = prim(IPR,i);
+    T = prim(IPR,i);  // prim(IPR) now stores temperature
 
     for (int a=0; a<3; ++a)
     {
@@ -929,7 +923,7 @@ void EquationOfState::ApplyPrimitiveFloors(AA &prim, AA &prim_scalar,
   else
   {
     n = prim(IDN,k,j,i)/mb;
-    P = prim(IPR,k,j,i);
+    T = prim(IPR,k,j,i);  // prim(IPR) now stores temperature
 
     for (int a=0; a<3; ++a)
     {
@@ -943,7 +937,7 @@ void EquationOfState::ApplyPrimitiveFloors(AA &prim, AA &prim_scalar,
 
   ps.GetEOS()->ApplyDensityLimits(n);
   ps.GetEOS()->ApplySpeciesLimits(Y);
-  Real T = ps.GetEOS()->GetTemperatureFromP(n, P, Y);
+  Real P = ps.GetEOS()->GetPressure(n, T, Y);
   ps.GetEOS()->ApplyPrimitiveFloor(n, Wvu, P, T, Y);
 
   // Now push the updated quantities back to Athena.
@@ -953,7 +947,7 @@ void EquationOfState::ApplyPrimitiveFloors(AA &prim, AA &prim_scalar,
     prim(IVX,i) = Wvu[0];
     prim(IVY,i) = Wvu[1];
     prim(IVZ,i) = Wvu[2];
-    prim(IPR,i) = P;
+    prim(IPR,i) = T;  // store updated temperature
     for (int l=0; l<NSCALARS; l++) {
       prim_scalar(l,i) = Y[l];
     }
@@ -964,7 +958,7 @@ void EquationOfState::ApplyPrimitiveFloors(AA &prim, AA &prim_scalar,
     prim(IVX,k,j,i) = Wvu[0];
     prim(IVY,k,j,i) = Wvu[1];
     prim(IVZ,k,j,i) = Wvu[2];
-    prim(IPR,k,j,i) = P;
+    prim(IPR,k,j,i) = T;  // store updated temperature
     for (int l=0; l<NSCALARS; l++) {
       prim_scalar(l,k,j,i) = Y[l];
     }
@@ -999,17 +993,16 @@ static void PrimitiveToConservedSingle(
   prim_pt[IVX] = prim(IVX, k, j, i);
   prim_pt[IVY] = prim(IVY, k, j, i);
   prim_pt[IVZ] = prim(IVZ, k, j, i);
-  prim_pt[IPR] = prim(IPR, k, j, i);
+  prim_pt[ITM] = prim(IPR, k, j, i);  // prim(IPR) now stores temperature
 
   for (int n=0; n<NSCALARS; n++) {
     Y[n] = prim_scalar(n,k,j,i);
   }
 
-  // Get temperature and apply floor
+  // Get pressure from temperature and apply floor
   ps.GetEOS()->ApplyDensityLimits(prim_pt[IDN]);
   ps.GetEOS()->ApplySpeciesLimits(Y);
-  prim_pt[ITM] =
-      ps.GetEOS()->GetTemperatureFromP(prim_pt[IDN], prim_pt[IPR], Y);
+  prim_pt[IPR] = ps.GetEOS()->GetPressure(prim_pt[IDN], prim_pt[ITM], Y);
   bool result = ps.GetEOS()->ApplyPrimitiveFloor(prim_pt[IDN], &prim_pt[IVX],
                                                  prim_pt[IPR], prim_pt[ITM],
                                                  Y);
@@ -1042,7 +1035,7 @@ static void PrimitiveToConservedSingle(
     std::cerr << "    ux  = " << prim(IVX, k, j, i) << "\n";
     std::cerr << "    uy  = " << prim(IVY, k, j, i) << "\n";
     std::cerr << "    uz  = " << prim(IVZ, k, j, i) << "\n";
-    std::cerr << "    P   = " << prim(IPR, k, j, i) << "\n";
+    std::cerr << "    T   = " << prim(IPR, k, j, i) << "\n";  // prim(IPR) stores temperature
     std::cerr << "  Conserved variables:\n";
     std::cerr << "    D   = " << cons_pt[IDN] << "\n";
     std::cerr << "    Sx  = " << cons_pt[IM1] << "\n";
@@ -1072,7 +1065,7 @@ static void PrimitiveToConservedSingle(
     prim(IVX, k, j, i) = prim_pt[IVX];
     prim(IVY, k, j, i) = prim_pt[IVY];
     prim(IVZ, k, j, i) = prim_pt[IVZ];
-    prim(IPR, k, j, i) = prim_pt[IPR];
+    prim(IPR, k, j, i) = prim_pt[ITM];  // prim(IPR) stores temperature
     for (int n=0; n<NSCALARS; n++) {
       prim_scalar(n,k,j,i) = prim_pt[IYF + n];
     }

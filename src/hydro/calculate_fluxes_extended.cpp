@@ -150,6 +150,24 @@ void AssembleFluxes(MeshBlock * pmb,
     }
   }
 
+#if USETM
+  const Real mb = pmb->peos->GetEOS().GetBaryonMass();
+  AT_N_sca w_rho(w, IDN);
+  AT_N_sca press_(nn1);  // local pressure array computed from temperature
+
+  for (int i = il; i <= iu; ++i)
+  {
+    Real Y[MAX_SPECIES] = {0.0};
+#if NSCALARS > 0
+    for (int n = 0; n < NSCALARS; n++)
+      Y[n] = pmb->pscalars->r(n, k, j, i);
+#endif
+    const Real n_bary = w_rho(k, j, i) / mb;
+    // w_p stores temperature (after refactoring); compute pressure from it.
+    press_(i) = pmb->peos->GetEOS().GetPressure(n_bary, w_p(k, j, i), Y);
+  }
+#endif // USETM
+
   // calculate flux
   #pragma omp simd
   for (int i = il; i <= iu; ++i)
@@ -157,9 +175,14 @@ void AssembleFluxes(MeshBlock * pmb,
     f(IDN,k,j,i) = u(IDN,k,j,i) * alpha(k,j,i) * (
       w_v_u_(ivx-1,i) - beta_u(ivx-1,k,j,i)/alpha(k,j,i)
     );
+#if USETM
+    const Real p_i = press_(i);
+#else
+    const Real p_i = w_p(k,j,i);
+#endif
     f(IEN,k,j,i) = u(IEN,k,j,i) * alpha(k,j,i) * (
       w_v_u_(ivx-1,i) - beta_u(ivx-1,k,j,i)/alpha(k,j,i)
-    ) + alpha(k,j,i)*sqrt_detgamma_(i)*w_p(k,j,i)*w_v_u_(ivx-1,i);
+    ) + alpha(k,j,i)*sqrt_detgamma_(i)*p_i*w_v_u_(ivx-1,i);
   }
 
   for (int a=0; a<NDIM; ++a)
@@ -179,7 +202,11 @@ void AssembleFluxes(MeshBlock * pmb,
   #pragma omp simd
   for (int i = il; i <= iu; ++i)
   {
+#if USETM
+    f(ivx,k,j,i) += press_(i) * alpha(k,j,i) * sqrt_detgamma_(i);
+#else
     f(ivx,k,j,i) += w_p(k,j,i) * alpha(k,j,i) * sqrt_detgamma_(i);
+#endif
   }
 
 #endif // MAGNETIC_FIELDS_ENABLED
@@ -299,8 +326,8 @@ void AssembleEigenvalues(MeshBlock * pmb,
     {
       Y[n] = pmb->pscalars->r(n,k,j,i);
     }
-    const Real T = pmb->peos->GetEOS().GetTemperatureFromP(
-      n, w_p(k,j,i), Y);
+    // w_p stores temperature (after refactoring); read directly.
+    const Real T = w_p(k,j,i);
 
     w_hrho_(i) = w_rho(k,j,i)*pmb->peos->GetEOS().GetEnthalpy(n, T, Y);
 

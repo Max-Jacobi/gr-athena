@@ -87,6 +87,7 @@ void Z4c::GetMatter(
   {
     AT_N_sca w_hrho(   mbi.nn1);
     AT_N_sca W(        mbi.nn1);  // Lorentz factor
+    AT_N_sca press(    mbi.nn1);  // pressure (from T in USETM, from IPR in non-USETM)
 
     AT_N_sca detgamma(mbi.nn1);
     AT_N_sca bsq(     mbi.nn1);
@@ -128,11 +129,9 @@ void Z4c::GetMatter(
         }
 #endif
 
-#if defined(Z4C_CX_ENABLED) || defined(Z4C_CC_ENABLED)
-        Real T = ph->derived_ms(IX_T,k,j,i);
-#else
-        Real T = peos->GetEOS().GetTemperatureFromP(n, w_p(i), Y);
-#endif
+        // prim(IPR) now stores temperature; read it directly.
+        Real T = w_p(i);
+        Real P = peos->GetEOS().GetPressure(n, T, Y);
 
         Real Wvu[3] = { };
         for (int ix=0; ix<3; ++ix)
@@ -140,9 +139,11 @@ void Z4c::GetMatter(
           Wvu[ix] = w_utilde_u(ix,i);
         }
 
-        peos->GetEOS().ApplyPrimitiveFloor(n, Wvu, w_p(i), T, Y);
+        peos->GetEOS().ApplyPrimitiveFloor(n, Wvu, P, T, Y);
         // propagate floors back
         w_rho(i) = n * mb;
+        // Update temperature in prim(IPR) after floor
+        w_p(i) = T;
 #if NSCALARS>0
         for (int l=0; l<NSCALARS; l++)
         {
@@ -150,16 +151,13 @@ void Z4c::GetMatter(
         }
 #endif
 
-#if defined(Z4C_CX_ENABLED) || defined(Z4C_CC_ENABLED)
-        Real h = ph->derived_ms(IX_ETH,k,j,i);
-#else
         Real h = peos->GetEOS().GetEnthalpy(n, T, Y);
-#endif
-
 
         w_hrho(i) = w_rho(i) * h;
+        press(i)  = P;  // store computed pressure for stress-energy tensor
 #else
         w_hrho(i) = w_rho(i) + gamma_adi/(gamma_adi-1.0) * w_p(i);
+        press(i)  = w_p(i);  // pressure is IPR in non-USETM
 #endif
 
         // compute Lorenz factors
@@ -269,7 +267,7 @@ void Z4c::GetMatter(
       ILOOP1(i)
       {
         Real const wb_fac = (w_hrho(i)+bsq(i))*SQR(W(i));
-        Real const pb_sum = (w_p(i)+bsq(i)/2.0);
+        Real const pb_sum = (press(i)+bsq(i)/2.0);
 
         mat.rho(k,j,i) = (wb_fac-pb_sum -
                           adm.alpha(k,j,i)*adm.alpha(k,j,i)*b0_u(i)*b0_u(i));
@@ -295,7 +293,7 @@ void Z4c::GetMatter(
 
       ILOOP1(i)
       {
-        mat.rho(k,j,i) = w_hrho(i)*SQR(W(i)) - w_p(i);
+        mat.rho(k,j,i) = w_hrho(i)*SQR(W(i)) - press(i);
 
         // Real oo_sqrtdg = 1.0 / std::sqrt(detgamma(i));
         // Real D   = ph->u(IDN,k,j,i);
@@ -315,7 +313,7 @@ void Z4c::GetMatter(
           ILOOP1(i)
           {
             mat.S_dd(a,b,k,j,i) = (w_hrho(i)*SQR(W(i))*v_d(a,i)*v_d(b,i)+
-                                   w_p(i)*adm.g_dd(a,b,k,j,i));
+                                   press(i)*adm.g_dd(a,b,k,j,i));
 
             // mat.S_dd(a,b,k,j,i) = (mat.S_d(a,k,j,i)*v_d(b,i)+
             //                        w_p(i)*adm.g_dd(a,b,k,j,i));

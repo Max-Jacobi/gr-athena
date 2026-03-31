@@ -224,6 +224,9 @@ Hydro::Hydro(MeshBlock *pmb, ParameterInput *pin) :
   w_hrho_l_.NewAthenaTensor(nn1);
   w_hrho_r_.NewAthenaTensor(nn1);
 
+  press_l_.NewAthenaTensor(nn1);
+  press_r_.NewAthenaTensor(nn1);
+
   cons_l_.NewAthenaTensor(nn1);
   cons_r_.NewAthenaTensor(nn1);
 

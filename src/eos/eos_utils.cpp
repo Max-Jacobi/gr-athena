@@ -37,7 +37,7 @@ void EquationOfState::StatePrintPoint(
 
   // primitive hydro
   AT_N_sca sc_prim_rho(  ph->w, IDN);
-  AT_N_sca sc_prim_P(ph->w, IPR);
+  AT_N_sca sc_prim_T(ph->w, IPR);  // prim(IPR) now stores temperature
   AT_N_vec sp_prim_util_u(ph->w, IVX);
 
   // Auxiliary hydro
@@ -85,7 +85,7 @@ void EquationOfState::StatePrintPoint(
     std::cout << "hydro fields [prim]=====================: " << "\n\n";
     std::cout << "sc=================: " << "\n";
     sc_prim_rho.PrintPoint("sc_prim_rho", k,j,i);
-    sc_prim_P.PrintPoint("sc_prim_P", k,j,i);
+    sc_prim_T.PrintPoint("sc_prim_T", k,j,i);
 
     std::cout << "vec================: " << "\n";
     sp_prim_util_u.PrintPoint("sp_prim_util_u", k,j,i);
@@ -711,7 +711,9 @@ void EquationOfState::DerivedQuantities(
     ) / W;
 
     fld_der_ms(IX_MAG,k,j,i) = fld_der_ms(IX_B2,k,j,i) / cons(IDN,k,j,i);
-    fld_der_ms(IX_BET,k,j,i) = fld_der_ms(IX_b2,k,j,i) / (2.0 * prim(IPR,k,j,i)) ;
+    // prim(IPR) now stores temperature; compute pressure from T for plasma beta.
+    const Real P_plasma = GetEOS().GetPressure(n, T, Y);
+    fld_der_ms(IX_BET,k,j,i) = fld_der_ms(IX_b2,k,j,i) / (2.0 * P_plasma) ;
     fld_der_ms(IX_MRI,k,j,i) = fld_der_ms(IX_b_U_3,k,j,i) / (std::sqrt(rho) * hyd_der_ms(IX_OM,k,j,i));
     fld_der_ms(IX_ALF,k,j,i) = std::sqrt(fld_der_ms(IX_B2,k,j,i) / (4.0 * M_PI * rho));
 

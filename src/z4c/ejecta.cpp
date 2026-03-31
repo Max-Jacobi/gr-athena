@@ -455,10 +455,8 @@ void Ejecta::Interp(MeshBlock * pmb)
       }
       Real npt = prim[IDN](i, j) / pmb->peos->GetEOS().GetBaryonMass();
       Real Wvu[3] = {prim[IVX](i, j), prim[IVY](i, j), prim[IVZ](i, j)};
-      Real prpt = prim[IPR](i, j);
-      pmb->peos->GetEOS().ApplyDensityLimits(npt);
-      pmb->peos->GetEOS().ApplySpeciesLimits(Ypt);
-      T(i, j) = pmb->peos->GetEOS().GetTemperatureFromP(npt, prpt, Ypt);
+      // prim[IPR] now stores temperature directly; no conversion needed.
+      T(i, j) = prim[IPR](i, j);
 #endif
       if (MAGNETIC_FIELDS_ENABLED) {
         for (int n = 0; n < NDIM; ++n) {

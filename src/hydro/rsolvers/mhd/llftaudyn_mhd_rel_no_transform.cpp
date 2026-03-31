@@ -427,6 +427,9 @@ void Hydro::RiemannSolver(
 
     w_hrho_l_(i) = w_rho_l_(i) * hl__;
     w_hrho_r_(i) = w_rho_r_(i) * hr__;
+    // prim(IPR) now stores temperature; compute pressure for cons/flux.
+    press_l_(i) = peos->GetEOS().GetPressure(nl__, Tl__, Yl__);
+    press_r_(i) = peos->GetEOS().GetPressure(nr__, Tr__, Yr__);
 
     // Calculate the wave speeds
     if (precon->xorder_use_aux_cs2)
@@ -489,6 +492,14 @@ void Hydro::RiemannSolver(
   #pragma omp simd
   for (int i = il; i <= iu; ++i)
   {
+#if USETM
+    // prim(IPR) now stores temperature; use precomputed pressure.
+    const Real p_l = press_l_(i);
+    const Real p_r = press_r_(i);
+#else
+    const Real p_l = w_p_l_(i);
+    const Real p_r = w_p_r_(i);
+#endif
 
     // assemble conserved variables -------------------------------------------
 
@@ -508,7 +519,7 @@ void Hydro::RiemannSolver(
     cons_l_(IEN, i) =
       sqrt_detgamma_(i) *
       ((w_hrho_l_(i) + b2_l_(i)) * SQR(W_l_(i)) - w_rho_l_(i) * W_l_(i) -
-       w_p_l_(i) - 0.5 * b2_l_(i) - SQR(alpha_(i) * b0_l_(i)));
+       p_l - 0.5 * b2_l_(i) - SQR(alpha_(i) * b0_l_(i)));
 
     // l: B^k
     cons_l_(IBY, i) = sqrt_detgamma_(i) * q_scB_u_l_(ivy - 1, i);
@@ -530,7 +541,7 @@ void Hydro::RiemannSolver(
     cons_r_(IEN, i) =
       sqrt_detgamma_(i) *
       ((w_hrho_r_(i) + b2_r_(i)) * SQR(W_r_(i)) - w_rho_r_(i) * W_r_(i) -
-       w_p_r_(i) - 0.5 * b2_r_(i) - SQR(alpha_(i) * b0_r_(i)));
+       p_r - 0.5 * b2_r_(i) - SQR(alpha_(i) * b0_r_(i)));
 
     // r: B^k
     cons_r_(IBY, i) = sqrt_detgamma_(i) * q_scB_u_r_(ivy - 1, i);
@@ -554,13 +565,13 @@ void Hydro::RiemannSolver(
     }
 
     flux_l_(ivx, i) +=
-      (w_p_l_(i) + 0.5 * b2_l_(i)) * alpha_(i) * sqrt_detgamma_(i);
+      (p_l + 0.5 * b2_l_(i)) * alpha_(i) * sqrt_detgamma_(i);
 
     // l: tau
     flux_l_(IEN, i) =
       cons_l_(IEN, i) * alpha_w_vtil_u_l_(ivx - 1, i) +
       alpha_(i) * sqrt_detgamma_(i) *
-        ((w_p_l_(i) + 0.5 * b2_l_(i)) * w_v_u_l_(ivx - 1, i) -
+        ((p_l + 0.5 * b2_l_(i)) * w_v_u_l_(ivx - 1, i) -
          alpha_(i) * b0_l_(i) * q_scB_u_l_(ivx - 1, i) * oo_W_l_(i));
 
     // l: B^k
@@ -585,13 +596,13 @@ void Hydro::RiemannSolver(
     }
 
     flux_r_(ivx, i) +=
-      (w_p_r_(i) + 0.5 * b2_r_(i)) * alpha_(i) * sqrt_detgamma_(i);
+      (p_r + 0.5 * b2_r_(i)) * alpha_(i) * sqrt_detgamma_(i);
 
     // r: tau
     flux_r_(IEN, i) =
       cons_r_(IEN, i) * alpha_w_vtil_u_r_(ivx - 1, i) +
       alpha_(i) * sqrt_detgamma_(i) *
-        ((w_p_r_(i) + 0.5 * b2_r_(i)) * w_v_u_r_(ivx - 1, i) -
+        ((p_r + 0.5 * b2_r_(i)) * w_v_u_r_(ivx - 1, i) -
          alpha_(i) * b0_r_(i) * q_scB_u_r_(ivx - 1, i) * oo_W_r_(i));
 
     // r: B^k
